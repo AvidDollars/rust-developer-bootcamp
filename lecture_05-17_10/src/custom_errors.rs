@@ -1,3 +1,5 @@
+//! module containing [`AppError`] enum.
+
 use std::fmt::{Debug, Display, Formatter, Result};
 
 pub enum AppError {
@@ -20,7 +22,7 @@ impl Debug for AppError {
 }
 
 impl Display for AppError {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, _f: &mut Formatter) -> Result {
         todo!();
     }
 }

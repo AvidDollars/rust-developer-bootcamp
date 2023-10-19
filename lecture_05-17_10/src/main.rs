@@ -1,14 +1,12 @@
-#![deny(unreachable_code, unreachable_patterns)]
-// TODO! remove after homework is done
-#![allow(unused)]
+#![deny(unreachable_code, unreachable_patterns, unused)]
+//#![allow(unused)]
 
-mod custom_errors;
-mod helpers;
+pub mod custom_errors;
+pub mod helpers;
 
 use custom_errors::AppError;
 use helpers::*;
-use std::error::Error;
-use std::{env, io, process};
+use std::{env, io};
 
 fn main() -> Result<(), AppError> {
     let cli_arg = env::args()

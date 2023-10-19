@@ -1,3 +1,14 @@
+//! Module containing helper methods
+//! 
+//! [`OnlyFirstCliArg`] extends [`std::env::Args`] trait.
+//! 
+//! [`OnlyFirstCliArg::only_first_provided`] method skips 1st argument (path of the executable),
+//! and returns Option of the 1st argument provided from an user. If any other user's arguments are provided, they will be ignored. 
+//! 
+//! [`TextTransformer`] trait used as text transformation tool.
+//! 
+//! [`transform_stdin_with`] function takes input from stdin and transform is based on an instance of [`TextTransformer`].
+
 use crate::custom_errors::AppError;
 use slug::slugify;
 use std::collections::HashMap;
@@ -7,7 +18,7 @@ use std::io;
 type ArgFnMap = HashMap<&'static str, fn(String) -> String>;
 
 pub trait OnlyFirstCliArg: Iterator {
-    fn only_first_provided(mut self) -> Option<String>
+    fn only_first_provided(self) -> Option<String>
     where
         Self: Iterator<Item = String>,
         Self: Sized,
@@ -43,7 +54,8 @@ impl TextTransformer {
 
     pub fn apply(&self, text: String, output: &mut dyn io::Write) -> Result<(), impl Error> {
         let transformed = (self.method)(text);
-        write!(output, "{}", transformed)
+        writeln!(output, "{}", transformed)
+
     }
 
     fn get_mapping() -> ArgFnMap {
@@ -68,8 +80,6 @@ pub fn transform_stdin_with(
         transformer
             .apply(line, output_stream)
             .map_err(|error| AppError::OnOutput(error.to_string()))?;
-
-        write!(output_stream, "\n");
     }
 
     Ok(())
