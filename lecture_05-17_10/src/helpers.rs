@@ -1,6 +1,8 @@
 use crate::custom_errors::AppError;
 use slug::slugify;
 use std::collections::HashMap;
+use std::error::Error;
+use std::io;
 
 type ArgFnMap = HashMap<&'static str, fn(String) -> String>;
 
@@ -39,8 +41,9 @@ impl TextTransformer {
         }
     }
 
-    pub fn apply(&self, text: String) -> String {
-        (self.method)(text)
+    pub fn apply(&self, text: String, output: &mut dyn io::Write) -> Result<(), impl Error> {
+        let transformed = (self.method)(text);
+        write!(output, "{}", transformed)
     }
 
     fn get_mapping() -> ArgFnMap {
