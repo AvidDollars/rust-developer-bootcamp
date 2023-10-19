@@ -1,6 +1,6 @@
 #![deny(unreachable_code, unreachable_patterns, unused)]
-//#![allow(unused)]
 
+mod csv_processing;
 pub mod custom_errors;
 pub mod helpers;
 
@@ -14,7 +14,8 @@ fn main() -> Result<(), AppError> {
         .ok_or(AppError::MissingCliArgument)?;
 
     let transformer = TextTransformer::new(&cli_arg)?;
-    transform_stdin_with(transformer, &mut io::stderr())?;
+    let output = &mut io::stdout();
+    transform_stdin_with(transformer, output)?;
 
     Ok(())
 }

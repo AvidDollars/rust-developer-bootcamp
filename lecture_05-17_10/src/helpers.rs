@@ -1,14 +1,15 @@
 //! Module containing helper methods
-//! 
+//!
 //! [`OnlyFirstCliArg`] extends [`std::env::Args`] trait.
-//! 
+//!
 //! [`OnlyFirstCliArg::only_first_provided`] method skips 1st argument (path of the executable),
-//! and returns Option of the 1st argument provided from an user. If any other user's arguments are provided, they will be ignored. 
-//! 
+//! and returns Option of the 1st argument provided from an user. If any other user's arguments are provided, they will be ignored.
+//!
 //! [`TextTransformer`] trait used as text transformation tool.
-//! 
+//!
 //! [`transform_stdin_with`] function takes input from stdin and transform is based on an instance of [`TextTransformer`].
 
+use crate::csv_processing::*;
 use crate::custom_errors::AppError;
 use slug::slugify;
 use std::collections::HashMap;
@@ -55,7 +56,6 @@ impl TextTransformer {
     pub fn apply(&self, text: String, output: &mut dyn io::Write) -> Result<(), impl Error> {
         let transformed = (self.method)(text);
         writeln!(output, "{}", transformed)
-
     }
 
     fn get_mapping() -> ArgFnMap {
@@ -66,6 +66,7 @@ impl TextTransformer {
         mapping.insert("slugify", |arg| slugify(arg));
         mapping.insert("scream", |arg| format!("{}!!!", arg));
         mapping.insert("reverse", |arg| arg.chars().rev().collect::<String>());
+        mapping.insert("csv", as_csv);
         mapping
     }
 }
