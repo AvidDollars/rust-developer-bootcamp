@@ -57,3 +57,20 @@ impl TextTransformer {
         mapping
     }
 }
+
+pub fn transform_stdin_with(
+    transformer: TextTransformer,
+    output_stream: &mut dyn io::Write,
+) -> Result<(), AppError> {
+    for line in io::stdin().lines() {
+        let line = line.map_err(|error| AppError::OnOutput(error.to_string()))?;
+
+        transformer
+            .apply(line, output_stream)
+            .map_err(|error| AppError::OnOutput(error.to_string()))?;
+
+        write!(output_stream, "\n");
+    }
+
+    Ok(())
+}
