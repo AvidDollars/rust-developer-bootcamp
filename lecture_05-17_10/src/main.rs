@@ -7,16 +7,16 @@ mod helpers;
 
 use custom_errors::AppError;
 use helpers::*;
+use std::error::Error;
 use std::{env, io, process};
 
 fn main() -> Result<(), AppError> {
-    // GETTING CLI ARG
     let cli_arg = env::args()
         .only_first_provided()
-        .ok_or(AppError::MissingCliArgument)?; //.unwrap_or_else(||{eprintln!("{}",AppError::MissingCliArgument);process::exit(1);});
+        .ok_or(AppError::MissingCliArgument)?;
 
-    // GETTING TEXT TRANSFORMER
-    let text_transformer = TextTransformer::new(&cli_arg)?;
+    let transformer = TextTransformer::new(&cli_arg)?;
+    transform_stdin_with(transformer, &mut io::stderr())?;
 
     Ok(())
 }
