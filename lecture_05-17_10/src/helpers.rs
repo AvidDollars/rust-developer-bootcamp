@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io;
 
-type ArgFnMap = HashMap<&'static str, fn(String) -> String>;
+type ArgFnMap = HashMap<&'static str, fn(&str) -> String>;
 
 pub trait OnlyFirstCliArg: Iterator {
     fn only_first_provided(self) -> Option<String>
@@ -30,22 +30,26 @@ pub trait OnlyFirstCliArg: Iterator {
 
 impl OnlyFirstCliArg for std::env::Args {}
 
-pub struct TextTransformer {
-    method: fn(String) -> String,
+pub struct TextTransformer<'a> {
+    method: fn(&str) -> String,
+    pub method_name: &'a str,
 }
 
-impl TextTransformer {
-    pub fn new(cli_arg: &str) -> Result<Self, AppError> {
+impl<'a> TextTransformer<'a> {
+    pub fn new(method_name: &'a str) -> Result<Self, AppError> {
         let mapping = Self::get_mapping();
-        let maybe_func = mapping.get(cli_arg);
+        let maybe_func = mapping.get(method_name);
 
         match maybe_func {
-            Some(func) => Ok(Self { method: *func }),
+            Some(func) => Ok(Self {
+                method: *func,
+                method_name,
+            }),
             None => {
                 let allowed: Vec<&str> = mapping.keys().copied().collect();
                 let message = format!(
                     "Invalid argument: '{}'\nAllowed arguments: {}",
-                    cli_arg,
+                    method_name,
                     allowed.join(" | ")
                 );
                 Err(AppError::InvalidCliArgument { message })
@@ -53,7 +57,7 @@ impl TextTransformer {
         }
     }
 
-    pub fn apply(&self, text: String, output: &mut dyn io::Write) -> Result<(), impl Error> {
+    pub fn apply(&self, text: &str, output: &mut dyn io::Write) -> Result<(), impl Error> {
         let transformed = (self.method)(text);
         writeln!(output, "{}", transformed)
     }
@@ -66,21 +70,39 @@ impl TextTransformer {
         mapping.insert("slugify", |arg| slugify(arg));
         mapping.insert("scream", |arg| format!("{}!!!", arg));
         mapping.insert("reverse", |arg| arg.chars().rev().collect::<String>());
-        mapping.insert("csv", as_csv);
+        mapping.insert("csv", |arg| arg.into()); // processing done in 'CsvTable' struct
         mapping
     }
 }
 
 pub fn transform_stdin_with(
     transformer: TextTransformer,
-    output_stream: &mut dyn io::Write,
+    mut output_stream: &mut dyn io::Write,
 ) -> Result<(), AppError> {
+    // tried to init CsvTable with usafe code, so that it would initialize only if "csv" arg is provided,
+    // but then started getting "Segmentation fault" error... too early to mess up with usafe code
+    let mut csv_table = CsvTable::new();
+
+    let output: &mut dyn io::Write = match transformer.method_name {
+        "csv" => &mut csv_table,
+        _ => &mut output_stream,
+    };
+
     for line in io::stdin().lines() {
         let line = line.map_err(|error| AppError::OnOutput(error.to_string()))?;
 
-        transformer
-            .apply(line, output_stream)
-            .map_err(|error| AppError::OnOutput(error.to_string()))?;
+        if line == "exit" {
+            if transformer.method_name == "csv" {
+                csv_table
+                    .output_to(output_stream)
+                    .map_err(|error| AppError::OnOutput(error.to_string()))?;
+            }
+            return Ok(());
+        } else {
+            transformer
+                .apply(line.trim(), output)
+                .map_err(|error| AppError::OnOutput(error.to_string()))?;
+        }
     }
 
     Ok(())
