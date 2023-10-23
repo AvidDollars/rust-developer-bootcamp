@@ -84,8 +84,17 @@ pub fn transform_stdin_with(
     let mut csv_table = CsvTable::new();
 
     let output: &mut dyn io::Write = match transformer.method_name {
-        "csv" => &mut csv_table,
-        _ => &mut output_stream,
+        "csv" => {
+            println!("\
+                Provide fields delimited by ','. \
+                First row is CSV header. Every next row must have exact amount of fields specified by the header. \
+                Type 'exit' for yielding CSV table.");
+            &mut csv_table
+        }
+        _ => {
+            println!("Provide your input. Type 'exit' for exiting the program.");
+            &mut output_stream
+        }
     };
 
     for line in io::stdin().lines() {
@@ -97,7 +106,7 @@ pub fn transform_stdin_with(
                     .output_to(output_stream)
                     .map_err(|error| AppError::OnOutput(error.to_string()))?;
             }
-            return Ok(());
+            break;
         } else {
             transformer
                 .apply(line.trim(), output)
