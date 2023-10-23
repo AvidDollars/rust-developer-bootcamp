@@ -1,8 +1,8 @@
 #![deny(unreachable_code, unreachable_patterns, unused)]
 
-mod csv_processing;
-mod custom_errors;
-mod helpers;
+pub mod csv_processing;
+pub mod custom_errors;
+pub mod helpers;
 
 use custom_errors::AppError;
 use helpers::*;

@@ -38,11 +38,7 @@ impl CsvTable {
             });
         }
 
-        let table: Vec<String> = self
-            .rows
-            .iter()
-            .map(|row| row.join(hr_line))
-            .collect();
+        let table: Vec<String> = self.rows.iter().map(|row| row.join(hr_line)).collect();
 
         let hr_line = "-".repeat(
             self.max_len_per_column.iter().sum::<usize>()
