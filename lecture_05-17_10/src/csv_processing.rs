@@ -1,3 +1,5 @@
+//! module containing [`CsvTable`] struct that provides functionality for processing CSV input
+
 use std::io::{self, Error as IoError, ErrorKind};
 use std::str;
 
@@ -26,7 +28,8 @@ impl CsvTable {
                 (0..to_add).for_each(|_| (field).push(' '));
             });
 
-        let header = self.header.join(" | ");
+        let hr_line = " | ";
+        let header = self.header.join(hr_line);
 
         for row in &mut self.rows {
             row.iter_mut().enumerate().for_each(|(index, field)| {
@@ -34,16 +37,16 @@ impl CsvTable {
                 (0..to_add).for_each(|_| (field).push(' '));
             });
         }
-        let vertical_separator = " | ";
+
         let table: Vec<String> = self
             .rows
             .iter()
-            .map(|row| row.join(vertical_separator))
+            .map(|row| row.join(hr_line))
             .collect();
 
         let hr_line = "-".repeat(
             self.max_len_per_column.iter().sum::<usize>()
-                + (self.header.iter().count() - 1) * vertical_separator.chars().count(),
+                + (self.header.iter().count() - 1) * hr_line.chars().count(),
         );
         write!(output, "{}\n{}\n{}", header, hr_line, table.join("\n"))
     }
