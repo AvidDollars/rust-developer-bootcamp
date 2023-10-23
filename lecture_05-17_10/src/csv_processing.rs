@@ -14,6 +14,10 @@ impl CsvTable {
     }
 
     pub fn output_to(&mut self, mut output: impl io::Write) -> io::Result<()> {
+        if self.header.is_empty() {
+            return Ok(());
+        }
+
         self.header
             .iter_mut()
             .enumerate()
