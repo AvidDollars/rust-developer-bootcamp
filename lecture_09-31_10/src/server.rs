@@ -76,35 +76,13 @@ pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
     Ok(())
 }
 
-fn read_stream_lines_(mut stream: TcpStream, client_sender: Sender<String>) {
-        
-    loop {
-
-        let mut len_bytes = [0_u8; 4];
-
-        match stream.read_exact(&mut len_bytes) {
-            Ok(_) => {
-                let len = u32::from_be_bytes(len_bytes) as usize;
-                let mut buffer = vec![0_u8; len];
-                stream.read_exact(&mut buffer);
-                println!("D: {:?}", buffer);
-                //let d = Message::decode_from_slice(&buffer);
-            },
-            Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => continue,
-            Err(error) => {
-                eprintln!("Error during reading stream: {error}");
-                continue;
-            }
-        };
-
-        thread::sleep(Duration::from_millis(2000));
-
-    } 
-}
-
 fn read_stream_bytes(mut stream: TcpStream, client_sender: Sender<String>) {
-    //let mut len_bytes = [0_u8; 4];
-    //let mut index = 0;
+
+    // TODO: create struct for this + impl Write for the struct
+    let mut len_bytes = [0_u8; 4];
+    let mut content_len = 0;
+    let mut content_populated = 0;
+    let mut index = 0;
     let mut content = vec![];
 
     for client_stream in buffered!(&stream).bytes() {
@@ -113,7 +91,34 @@ fn read_stream_bytes(mut stream: TcpStream, client_sender: Sender<String>) {
 
             Ok(byte) => {
 
-                content.push(byte);     
+                if index < 4 {
+                    len_bytes[index] = byte;
+                    index += 1;
+                    
+                }
+
+                else if index == 4 && content_len == 0 {
+                    content_len = u32::from_be_bytes(len_bytes) as usize;
+                    content = Vec::with_capacity(content_len);
+                    content.push(byte);
+                    content_populated += 1;
+                }
+
+                else if content_populated  < content_len - 1 {
+                        content.push(byte);
+                        content_populated += 1;
+                }
+
+                else {
+                    content.push(byte);
+                    println!("m: {:?}", Message::decode_from_slice(&content));
+
+                    // cleanup before next message
+                    content_len = 0;
+                    content_populated = 0;
+                    index = 0;
+                    content.clear();
+                }
             },
             
             Err(error) => {
@@ -136,5 +141,5 @@ fn read_stream_bytes(mut stream: TcpStream, client_sender: Sender<String>) {
 
         //println!("[LINE]: {:?}", line);
         //client_sender.send(line);
-    }   
+    }  
 }

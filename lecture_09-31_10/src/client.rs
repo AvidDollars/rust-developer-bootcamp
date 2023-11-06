@@ -25,7 +25,7 @@ pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), Box<dyn Error>> {
 
         println!("M: {:?}", message);
         let (length, message) = message.encode()?;
-        //stream.write(&length.to_be_bytes())?;
+        stream.write(&length.to_be_bytes())?;
         stream.write_all(&message)?;
         //message.to_writer(&mut stream).map_err(|error| eprintln!("Unable to send message to server: {error}."));
     }
