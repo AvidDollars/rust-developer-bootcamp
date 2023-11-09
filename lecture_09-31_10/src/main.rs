@@ -10,8 +10,8 @@ pub mod config;
 pub mod fs_ops;
 pub mod server;
 pub mod message;
-mod server_helpers;
-mod client_helpers;
+mod helpers;
+use std::net::Ipv4Addr;
 
 // logging, env vars parsing
 
