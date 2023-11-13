@@ -1,46 +1,83 @@
-use crate::env_args::EnvArgs;
 use crate::helpers::*;
 use crate::message::*;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::error::Error;
-use std::io::{self, ErrorKind};
-use std::io::{prelude::*, BufReader};
-use std::net::{Shutdown, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
-use std::rc::Rc;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::sync::{mpsc, Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
-fn broadcast_from(sender: String, recipients: Vec<String>) {}
+use std::io::{self, ErrorKind};
+use std::net::{SocketAddrV4, TcpListener, TcpStream};
+use std::sync::mpsc;
+use std::sync::mpsc::{Sender, TryRecvError};
 
 pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
     let listener = TcpListener::bind(address.into())?;
     listener.set_nonblocking(true)?;
-    println!("SERVER LISTENING ON: {}", get_server_address(&listener));
+    print_server_address(&listener);
 
-    //let clients: HashMap<SocketAddr, TcpStream> = HashMap::new();
     let mut clients = vec![];
     let (client_sender, server_receiver) = mpsc::channel::<Message>();
 
     for stream in listener.incoming() {
         match stream {
-            Ok(mut stream) => {
-                clients.push(stream.try_clone().unwrap()); // something better than cloning ???
+            Ok(stream) => {
+                #[cfg(debug_assertions)]
+                println!("INFO: new connection: {:?}", stream);
+
+                // size_of::<TcpStream>() -> 8 bytes... I guess in that case is cloing OK, isn't it?
+                clients.push(stream.try_clone()?);
                 let client_sender = client_sender.clone();
                 new_thread!(read_and_broadcast(stream, client_sender));
             }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+
+            // process messages coming from clients
+            Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => {
                 match &server_receiver.try_recv() {
                     Ok(message) => {
                         #[cfg(debug_assertions)]
                         println!("INFO: message arrived: {:?}", message);
 
-                        for client_stream in &mut clients {
-                            if client_stream.peer_addr().unwrap() != message.address().unwrap() {
-                                // TODO: unwrap
-                                send_encoded_to_client(message.clone(), client_stream);
+                        if message.is_quit() {
+                            let address = message.get_sender().expect("message will have sender");
+
+                            // remove TcpStream from the vector when a client sends ".quit"
+                            let maybe_idx = clients
+                                .iter()
+                                .enumerate()
+                                .find(|(_index, stream)| stream.peer_addr().unwrap() == address);
+
+                            if maybe_idx.is_some() {
+                                let (idx, stream) = maybe_idx.expect("maybe_idx.is_some() == true");
+
+                                #[cfg(debug_assertions)]
+                                println!("INFO: removing from clients: {:?}", stream);
+                                clients.remove(idx);
+                            } else {
+                                #[cfg(debug_assertions)]
+                                eprintln!("ERROR: {:?} not in the list of clients", stream);
+                            }
+                        } else {
+                            // broadcasting
+                            for client_stream in &mut clients {
+                                let peer_address = client_stream.peer_addr().map_err(|error| {
+                                    eprintln!(
+                                        "cannot obtain peer address during broadcasting: {error}"
+                                    );
+                                    io::Error::from(ErrorKind::AddrNotAvailable)
+                                })?;
+
+                                if peer_address
+                                    != message.get_sender().expect("message will have sender")
+                                {
+                                    match send_encoded(message.clone(), client_stream) {
+                                        Ok(_) => {
+                                            #[cfg(debug_assertions)]
+                                            println!(
+                                                "INFO: sending encoded message: {:?}",
+                                                client_stream
+                                            );
+                                        }
+                                        Err(error) => {
+                                            eprintln!("error during broadcasting: {error}")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -50,18 +87,28 @@ pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
             }
             Err(error) => eprintln!("encountered IO error: {error}"),
         }
-        //println!("{:?}", clients);
-        //thread::sleep(Duration::from_millis(2000));
     }
-    println!("[END]: listening");
-
     Ok(())
 }
 
-// TODO: rename it to something less retarded
 fn read_and_broadcast(mut stream: TcpStream, client_sender: Sender<Message>) {
     loop {
-        let message = Message::try_from(&mut stream).unwrap(); // may return connection reset
-        client_sender.send(message);
+        let message = Message::try_from(&mut stream);
+
+        let _ = match message {
+            Ok(message) => client_sender
+                .send(message)
+                .map_err(|error| eprintln!("unable to send message: {error}")),
+            Err(ref error)
+                if error.kind() == ErrorKind::ConnectionReset
+                    || error.kind() == ErrorKind::ConnectionAborted =>
+            {
+                return;
+            }
+            Err(error) => {
+                eprintln!("unable to broadcast: {}", error);
+                return;
+            }
+        };
     }
 }

@@ -1,9 +1,7 @@
-use clap::{Parser, Subcommand};
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::path::PathBuf;
-use std::{env, fmt::format};
-
 use crate::config::{DEFAULT_HOST, DEFAULT_PORT};
+
+use std::env;
+use std::net::{Ipv4Addr, SocketAddrV4};
 
 #[derive(Debug)]
 pub struct EnvArgs {
@@ -22,10 +20,6 @@ impl EnvArgs {
     pub fn is_server(&self) -> bool {
         self.mode == "server"
     }
-
-    pub fn is_client(&self) -> bool {
-        self.mode == "client"
-    }
 }
 
 impl EnvArgs {
@@ -42,7 +36,7 @@ impl EnvArgs {
                 "-c" | "--client" => mode = "client".into(),
                 _ => {
                     return Err(format!(
-                        "Invalid mode '{value}'. Allowed are: '--server' | '--client'."
+                        "Invalid mode '{value}'. Allowed are: '--server (-s)' | '--client (-c)'."
                     ))
                 }
             },

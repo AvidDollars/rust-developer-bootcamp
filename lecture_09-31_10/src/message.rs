@@ -1,97 +1,98 @@
+use crate::config::{FILES_FOLDER, IMAGES_FOLDER};
 use crate::helpers::*;
+
 use serde::{Deserialize, Serialize};
 use serde_cbor::{self, Result as CborResult};
-use std::error::Error;
+use std::fmt::{self, Display};
 use std::fs;
-use std::io::{self, ErrorKind};
-use std::io::{prelude::*, BufReader};
-use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::io::{self, prelude::*, ErrorKind};
+use std::net::{SocketAddr, TcpStream};
 use std::result::Result;
-use std::str::Bytes;
-use std::{path::Path, str::FromStr};
+use std::str;
 
-// TODO: struct Message { sender, TypeEnum: Text | Image | File }
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Message {
-    Text {
-        content: String,
-        sender: Option<SocketAddr>,
-    },
-    Image {
-        name: String,
-        content: Vec<u8>,
-        sender: Option<SocketAddr>,
-    },
-    File {
-        name: String,
-        content: Vec<u8>,
-        sender: Option<SocketAddr>,
-    },
+pub struct Message {
+    pub type_: MessageType,
+    sender: Option<SocketAddr>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum MessageType {
+    Text { content: String },
+    Image { name: String, content: Vec<u8> },
+    File { name: String, content: Vec<u8> },
+    QuitSignal,
+}
+
+impl Display for Message {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        use MessageType::*;
+        let sender = self
+            .sender
+            .map(|address| address.to_string())
+            .unwrap_or_else(|| "unknown".into());
+
+        match &self.type_ {
+            Text { content } => {
+                write!(formatter, "{}", format!("[{}]: {}", sender, content))
+            }
+            Image { name, .. } | File { name, .. } => {
+                write!(formatter, "[{}]: receiving {}", sender, name)
+            }
+            QuitSignal => unreachable!(),
+        }
+    }
 }
 
 impl Message {
-    // dunno... I guess totally retarded approach but I couldn't come up with anything better
-    pub fn set_missing_address(&mut self, ip: SocketAddr) {
-        match self {
-            Self::Text { sender, content } => {
-                if sender.is_none() {
-                    *self = Self::Text {
-                        content: content.to_string(),
-                        sender: Some(ip),
-                    };
-                }
-            }
-            Self::Image {
-                name,
-                content,
-                sender,
-            } => {
-                if sender.is_none() {
-                    *self = Self::Image {
-                        name: name.to_string(),
-                        content: content.to_vec(),
-                        sender: Some(ip),
-                    }
-                }
-            }
-            Self::File {
-                name,
-                content,
-                sender,
-            } => {
-                if sender.is_none() {
-                    *self = Self::Image {
-                        name: name.to_string(),
-                        content: content.to_vec(),
-                        sender: Some(ip),
-                    }
-                }
-            }
+    pub fn quit_signal(sender: Option<SocketAddr>) -> Self {
+        Self {
+            type_: MessageType::QuitSignal,
+            sender,
         }
     }
 
-    pub fn address(&self) -> &Option<SocketAddr> {
-        match self {
-            Self::Text { sender, .. } => sender,
-            Self::File { sender, .. } => sender,
-            Self::Image { sender, .. } => sender,
-        }
+    pub fn is_quit(&self) -> bool {
+        self.type_ == MessageType::QuitSignal
     }
 
+    pub fn set_sender(&mut self, address: SocketAddr) {
+        self.sender = Some(address)
+    }
+
+    pub fn get_sender(&self) -> &Option<SocketAddr> {
+        &self.sender
+    }
+
+    pub fn has_sender(&self) -> bool {
+        self.sender.is_some()
+    }
+
+    pub fn save_file(&self) -> Result<(), io::Error> {
+        use MessageType::*;
+
+        match &self.type_ {
+            Text { .. } => return Err(io::Error::from(ErrorKind::Unsupported)),
+            Image { name, content } => {
+                let mut file = fs::File::create(format!("./{}/{}", IMAGES_FOLDER, name))?;
+                file.write_all(&content)?;
+                Ok(())
+            }
+            File { name, content } => {
+                let mut file = fs::File::create(format!("./{}/{}", FILES_FOLDER, name))?; // if file exists it will be overwritten
+                file.write_all(content)?;
+                Ok(())
+            }
+            QuitSignal => unreachable!(),
+        }
+    }
+}
+
+impl Message {
     pub fn encode(&self) -> CborResult<(u32, Vec<u8>)> {
-        //serde_cbor::to_writer(&mut writer, self)?;
         let encoded_content = serde_cbor::to_vec(self)?;
         let encoded_length = encoded_content.len() as u32;
         Ok((encoded_length, encoded_content))
-    }
-
-    // TODO: delete... probably redundant
-    pub fn to_writer(&self, mut writer: impl io::Write) -> CborResult<()> {
-        let encoded_content = serde_cbor::to_vec(&self)?;
-        let encoded_length = encoded_content.len() as u32;
-        serde_cbor::to_writer(&mut writer, &encoded_length)?;
-        serde_cbor::to_writer(&mut writer, &encoded_content)?;
-        Ok(())
     }
 
     pub fn decode_from_slice(slice: &[u8]) -> CborResult<Self> {
@@ -100,22 +101,33 @@ impl Message {
     }
 }
 
-// From CLI input
+// try to create Message from CLI input
 impl TryFrom<&str> for Message {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut splitted = value.split(' ');
-        let first_arg = splitted.next().expect("will contain &str");
+        let first_arg = splitted.next().expect("will contain &str").trim();
+
+        if first_arg == ".quit" {
+            return Ok(Message {
+                type_: MessageType::QuitSignal,
+                sender: None,
+            });
+        }
+
         let second_arg = splitted.next();
 
         let path = match second_arg {
             // text message
             None => {
-                return Ok(Self::Text {
+                let type_ = MessageType::Text {
                     content: first_arg.into(),
+                };
+                return Ok(Self {
+                    type_,
                     sender: None,
-                })
+                });
             }
 
             // .file | .image
@@ -127,22 +139,30 @@ impl TryFrom<&str> for Message {
                 let content = fs::read(path).map_err(|error| error.to_string())?;
 
                 if type_ == ".file" {
-                    Ok(Self::File {
-                        name: path.into(),
-                        content,
+                    let name = path.to_string();
+                    let type_ = MessageType::File { name, content };
+                    Ok(Self {
+                        type_,
                         sender: None,
                     })
                 } else {
-                    Ok(Self::Image {
-                        name: path.into(),
-                        content,
+                    let name = current_timestamp().unwrap_or_else(|_| path.into()) + ".png"; // if timestamp cannot be used as a name, use path
+                    let type_ = MessageType::Image { name, content };
+                    Ok(Self {
+                        type_,
                         sender: None,
                     })
                 }
             }
-
-            
-            _ => Ok(Self::Text { content: first_arg.into(), sender: None }),
+            _ => {
+                let type_ = MessageType::Text {
+                    content: format!("{} {} {}", first_arg, path, splitted.collect::<String>()),
+                };
+                return Ok(Self {
+                    type_,
+                    sender: None,
+                });
+            }
         }
     }
 }
@@ -150,7 +170,7 @@ impl TryFrom<&str> for Message {
 impl TryFrom<&mut TcpStream> for Message {
     type Error = io::Error;
 
-    // retarded, but couldn't do any better
+    // retarded, but couldn't do any better... at least it works xD
     fn try_from(stream: &mut TcpStream) -> Result<Self, io::Error> {
         let mut len_bytes = [0_u8; 4];
         let mut content_len = 0;
@@ -180,16 +200,14 @@ impl TryFrom<&mut TcpStream> for Message {
                     }
                 }
 
-                Err(error) => {
-                    match error.kind() {
-                        ErrorKind::ConnectionReset => return Err(error),
-                        ErrorKind::WouldBlock => continue,
-                        error => {
-                            eprintln!("Error during reading stream: {error}");
-                            continue; // ?
-                        }
+                Err(error) => match error.kind() {
+                    ErrorKind::ConnectionReset | ErrorKind::ConnectionAborted => return Err(error),
+                    ErrorKind::WouldBlock => continue,
+                    error => {
+                        eprintln!("Error during reading stream: {error}");
+                        continue;
                     }
-                }
+                },
             };
         }
 
