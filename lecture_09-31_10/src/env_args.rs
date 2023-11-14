@@ -1,4 +1,4 @@
-use crate::config::{DEFAULT_HOST, DEFAULT_PORT};
+use clap::{arg, command, value_parser};
 
 use std::env;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -24,45 +24,35 @@ impl EnvArgs {
 
 impl EnvArgs {
     pub fn new() -> Result<Self, String> {
-        let mut cli_args = env::args();
-        cli_args.next(); // ignoring path of the executable
+        let matches = command!()
+            .about("Client-Server chat application for broadcasting messages, files & images.")
+            .arg(
+                arg!(mode: "Mode of operation: server (default) or client")
+                    .short('m')
+                    .long("mode")
+                    .value_parser(["server", "client"])
+                    .default_value("server"),
+            )
+            .arg(
+                arg!(host: "IPv4 address of the host (default: 127.0.0.1)")
+                    .short('o')
+                    .long("host")
+                    .value_parser(value_parser!(Ipv4Addr))
+                    .default_value("127.0.0.1"),
+            )
+            .arg(
+                arg!(port: "Specifies a port (default: 11111)")
+                    .short('p')
+                    .long("port")
+                    .value_parser(value_parser!(u16))
+                    .default_value("11111"),
+            )
+            .get_matches();
 
-        let (mode, host, port);
-
-        match cli_args.next() {
-            None => mode = "server".to_string(),
-            Some(value) => match &value[..] {
-                "-s" | "--server" => mode = "server".into(),
-                "-c" | "--client" => mode = "client".into(),
-                _ => {
-                    return Err(format!(
-                        "Invalid mode '{value}'. Allowed are: '--server (-s)' | '--client (-c)'."
-                    ))
-                }
-            },
-        }
-
-        match cli_args.next() {
-            None => host = Ipv4Addr::from(DEFAULT_HOST),
-            Some(ref value) => {
-                host = value.parse::<Ipv4Addr>().map_err(|_error| {
-                    format!("invalid address '{value}'. Use proper IPv4 address.")
-                })?;
-            }
-        }
-
-        match cli_args.next() {
-            None => port = DEFAULT_PORT,
-            Some(value) => {
-                port = value.parse::<u16>().map_err(|_error| {
-                    format!(
-                        "invalid port '{value}'. Use port between {0} - {}",
-                        u16::MAX
-                    )
-                })?;
-            }
-        }
-
-        Ok(Self { mode, host, port })
+        Ok(Self {
+            mode: matches.get_one::<String>("mode").expect("x").to_string(),
+            host: *matches.get_one::<Ipv4Addr>("host").expect("y"),
+            port: *matches.get_one::<u16>("port").expect("z"),
+        })
     }
 }

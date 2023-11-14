@@ -11,7 +11,7 @@ pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
     listener.set_nonblocking(true)?;
     print_server_address(&listener);
 
-    let mut clients = vec![];
+    let mut clients = vec![]; // not ideal, but sufficient enough for small amount of connected clients
     let (client_sender, server_receiver) = mpsc::channel::<Message>();
 
     for stream in listener.incoming() {
@@ -23,7 +23,10 @@ pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
                 // size_of::<TcpStream>() -> 8 bytes... I guess in that case is cloing OK, isn't it?
                 clients.push(stream.try_clone()?);
                 let client_sender = client_sender.clone();
-                new_thread!(read_and_broadcast(stream, client_sender));
+                new_thread!(read_from_client_and_send_for_broadcasting(
+                    stream,
+                    client_sender
+                ));
             }
 
             // process messages coming from clients
@@ -91,7 +94,10 @@ pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
     Ok(())
 }
 
-fn read_and_broadcast(mut stream: TcpStream, client_sender: Sender<Message>) {
+fn read_from_client_and_send_for_broadcasting(
+    mut stream: TcpStream,
+    client_sender: Sender<Message>,
+) {
     loop {
         let message = Message::try_from(&mut stream);
 
