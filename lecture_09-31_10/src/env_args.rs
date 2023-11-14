@@ -50,9 +50,9 @@ impl EnvArgs {
             .get_matches();
 
         Ok(Self {
-            mode: matches.get_one::<String>("mode").expect("x").to_string(),
-            host: *matches.get_one::<Ipv4Addr>("host").expect("y"),
-            port: *matches.get_one::<u16>("port").expect("z"),
+            mode: matches.get_one::<String>("mode").expect("provided").to_string(),
+            host: *matches.get_one::<Ipv4Addr>("host").expect("provided"),
+            port: *matches.get_one::<u16>("port").expect("provided"),
         })
     }
 }
