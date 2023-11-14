@@ -5,4 +5,4 @@ pub const DEFAULT_HOST: [u8; 4] = [127, 0, 0, 1];
 pub const DEFAULT_PORT: u16 = 11111;
 
 // Buffer on client's side for receiving messages from server
-pub const CLIENT_MSG_BUFFER_SIZE: usize = 8192;
+pub const CLIENT_MSG_BUFFER_SIZE: usize = 65_536;

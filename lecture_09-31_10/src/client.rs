@@ -73,8 +73,26 @@ pub fn run(address: impl Into<SocketAddrV4>) -> io::Result<SocketAddr> {
                 let message_in_bytes: Vec<_> = message.take(content_len).collect();
 
                 match Message::decode_from_slice(&message_in_bytes) {
-                    Ok(message) => {
+                    Ok(mut message) => {
                         println!("{}", message);
+
+                        // Ok(false) -> is image, but not png -> conversion to .png
+                        if let Ok(false) = message.is_image_and_png() {
+                            let conversion_result = message.convert_image_to_png();
+
+                            if let Err(error) = conversion_result {
+                                match error.kind() {
+                                    ErrorKind::InvalidData => {
+                                        eprintln!("image cannot be converterted to .png");
+                                    }
+                                    ErrorKind::Other => {
+                                        eprintln!("image cannot be saved");
+                                    }
+                                    ErrorKind::Unsupported => (),
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
 
                         let _ = message.save_file().map_err(|error| {
                             // saving plain message -> Unsupported
