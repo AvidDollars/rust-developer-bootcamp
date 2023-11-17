@@ -4,7 +4,7 @@ use crate::utils::*;
 use image::io::Reader as ImageReader;
 use image::ImageOutputFormat;
 use serde::{Deserialize, Serialize};
-use serde_cbor::{self, Result as CborResult};
+pub use serde_cbor::{self, Result as CborResult};
 
 use std::fmt::{self, Display};
 use std::fs;
@@ -77,7 +77,7 @@ impl Message {
         use MessageType::*;
 
         match &self.type_ {
-            Image { content, .. } => Ok(content[..8] == png_header),
+            Image { content, .. } => Ok(content[..png_header.len()] == png_header),
             _ => Err(io::Error::from(ErrorKind::Unsupported)),
         }
     }

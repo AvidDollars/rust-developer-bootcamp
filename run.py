@@ -62,7 +62,9 @@ class CliArgs:
         return port
 
 def call_subprocess(args: CliArgs):
-    subprocess.run(f"cargo run --manifest-path ./{args.mode}/Cargo.toml --release -- --mode {args.mode} --host {args.host} --port {args.port}")
+    cargo_run = f"cargo run --manifest-path ./{args.mode}/Cargo.toml --release"
+    args = f"--mode {args.mode} --host {args.host} --port {args.port}"
+    subprocess.run(" -- ".join((cargo_run, args)))
 
 def parse_cli_args() -> CliArgs:
 
@@ -86,6 +88,9 @@ if __name__ == "__main__":
 
     except ValueError as error:
         print(error)
+
+    except KeyboardInterrupt:
+        print("process interrupted")
 
     except Exception as error:
         print(f"unexpected error occurred: {error}")

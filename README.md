@@ -23,4 +23,5 @@ MIT
 ```markdown
 - run.py -> subprocess.run(..., shell=True, check=True) (check: https://docs.python.org/3/library/subprocess.html)
 - client -> files & images folder to be created inside client folder
+- shared -> remake TryFrom<&mut TcpStream> for Message
 ```

@@ -1,7 +1,6 @@
 #![deny(unused, unreachable_code, unreachable_patterns)]
 
 mod app;
-mod constants;
 mod utils;
 
 use crate::utils::create_missing_folders;

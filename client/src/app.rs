@@ -1,6 +1,6 @@
-use crate::constants::CLIENT_MSG_BUFFER_SIZE;
 use crate::utils::spawn_stdin_channel;
 
+use shared::constants::CLIENT_MSG_BUFFER_SIZE;
 use shared::message::{CborResult, Message, MessageType};
 use shared::utils::{print_peer_address, send_encoded};
 
@@ -18,9 +18,7 @@ pub fn run(address: impl Into<SocketAddrV4>) -> io::Result<SocketAddr> {
 
     loop {
         match stdin_message.try_recv() {
-            Ok(message) => {
-                send_stdin_message(message, &mut stream)?;
-            }
+            Ok(message) => send_stdin_message(message, &mut stream)?,
             Err(TryRecvError::Empty) => (),
             Err(error) => eprintln!("error during receiving stdin messages: {error}"),
         }
@@ -71,7 +69,7 @@ fn try_connect(address: impl Into<SocketAddrV4>) -> Result<TcpStream, IoError> {
         .map_err(tcp_connect_error_hander)
 }
 
-fn send_stdin_message(mut message: Message, stream: &mut TcpStream) -> io::Result<SocketAddr> {
+fn send_stdin_message(mut message: Message, stream: &mut TcpStream) -> io::Result<()> {
     let address = stream.local_addr()?;
     message.set_sender(address);
     let is_quit_message = message.type_ == MessageType::QuitSignal;
@@ -80,7 +78,7 @@ fn send_stdin_message(mut message: Message, stream: &mut TcpStream) -> io::Resul
     if is_quit_message {
         std::process::exit(0);
     } else {
-        Ok(address)
+        Ok(())
     }
 }
 
