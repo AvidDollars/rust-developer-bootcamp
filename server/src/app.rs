@@ -1,15 +1,17 @@
 use shared::message::Message;
-use shared::utils::{new_thread, print_server_address, send_encoded};
+use shared::tracing::{debug, error, info};
+use shared::utils::{get_server_address, new_thread, send_encoded};
 
+use std::fmt::Debug;
 use std::io::{self, ErrorKind};
 use std::net::{SocketAddrV4, TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender, TryRecvError};
 
-pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
+pub fn run<A: Into<SocketAddrV4> + Debug>(address: A) -> Result<(), io::Error> {
     let listener = TcpListener::bind(address.into())?;
     listener.set_nonblocking(true)?;
-    print_server_address(&listener);
+    info!("listening on: {}", get_server_address(&listener));
 
     let mut clients = vec![]; // not ideal, but sufficient enough for small amount of connected clients
     let (client_sender, server_receiver) = mpsc::channel::<Message>();
@@ -25,10 +27,10 @@ pub fn run(address: impl Into<SocketAddrV4>) -> Result<(), io::Error> {
                 match &server_receiver.try_recv() {
                     Ok(message) => broadcast(message, &mut clients, &stream)?,
                     Err(TryRecvError::Empty) => (),
-                    Err(error) => eprintln!("error during receiving stdin messages: {error}"),
+                    Err(error) => error!("error during receiving stdin messages: {}", error),
                 }
             }
-            Err(error) => eprintln!("encountered IO error: {error}"),
+            Err(error) => error!("encountered IO error: {}", error),
         }
     }
     Ok(())
@@ -48,14 +50,11 @@ fn quit_message_handler(
         .find(|(_index, stream)| stream.peer_addr().unwrap() == address);
 
     if maybe_idx.is_some() {
-        let (idx, _stream) = maybe_idx.expect("maybe_idx.is_some() == true");
-
-        #[cfg(debug_assertions)]
-        println!("INFO: removing from clients: {:?}", stream);
+        let (idx, stream) = maybe_idx.expect("maybe_idx.is_some() == true");
+        debug!("removing from clients: {:?}", stream);
         clients.remove(idx);
     } else {
-        #[cfg(debug_assertions)]
-        eprintln!("ERROR: {:?} not in the list of clients", stream);
+        error!("{:?} not in the list of clients", stream);
     }
 }
 
@@ -64,8 +63,7 @@ fn handle_new_connection(
     clients: &mut Vec<TcpStream>,
     client_sender: Sender<Message>,
 ) -> io::Result<()> {
-    #[cfg(debug_assertions)]
-    println!("INFO: new connection: {:?}", connection);
+    info!("new connection: {:?}", connection);
 
     // size_of::<TcpStream>() -> 8 bytes... I guess in that case is cloing OK, isn't it?
     clients.push(connection.try_clone()?);
@@ -82,19 +80,14 @@ fn broadcast_message_to_other_clients(
 ) -> Result<(), io::Error> {
     for client_stream in clients {
         let peer_address = client_stream.peer_addr().map_err(|error| {
-            eprintln!("cannot obtain peer address during broadcasting: {error}");
+            error!("cannot obtain peer address during broadcasting: {}", error);
             io::Error::from(ErrorKind::AddrNotAvailable)
         })?;
 
         if peer_address != message.get_sender().expect("message will have sender") {
             match send_encoded(message.clone(), client_stream) {
-                Ok(_) => {
-                    #[cfg(debug_assertions)]
-                    println!("INFO: sending encoded message: {:?}", client_stream);
-                }
-                Err(error) => {
-                    eprintln!("error during broadcasting: {error}")
-                }
+                Ok(_) => debug!("sending encoded message: {:?}", client_stream),
+                Err(error) => error!("error during broadcasting: {}", error),
             }
         }
     }
@@ -106,10 +99,10 @@ fn broadcast(
     clients: &mut Vec<TcpStream>,
     stream: &Result<TcpStream, io::Error>,
 ) -> Result<(), io::Error> {
-    #[cfg(debug_assertions)]
-    println!("INFO: message arrived: {:?}", message);
+    debug!("message arrived: {:?}", message);
 
     if message.is_quit() {
+        broadcast_message_to_other_clients(message, clients)?;
         quit_message_handler(message, clients, stream);
     } else {
         broadcast_message_to_other_clients(message, clients)?
@@ -127,15 +120,25 @@ fn read_from_client_and_send_for_broadcasting(
         let _ = match message {
             Ok(message) => client_sender
                 .send(message)
-                .map_err(|error| eprintln!("unable to send message: {error}")),
-            Err(ref error)
+                .map_err(|error| error!("unable to send message: {}", error)),
+            Err(ref error) // e.g. SIGINT
                 if error.kind() == ErrorKind::ConnectionReset
                     || error.kind() == ErrorKind::ConnectionAborted =>
             {
+                let peer_address = stream.peer_addr().map_err(|error| {
+                    error!("cannot obtain peer address (client will not be removed from Vector of clients -> memory leak): {}", error);
+                });
+
+                if let Ok(address) = peer_address {
+                    let message = Message::quit_signal(Some(address));
+                    client_sender.send(message)
+                        .unwrap_or_else(|error| error!("unable to send message: {}", error));
+                }
+
                 return;
             }
             Err(error) => {
-                eprintln!("unable to broadcast: {}", error);
+                error!("unable to broadcast: {}", error);
                 return;
             }
         };
