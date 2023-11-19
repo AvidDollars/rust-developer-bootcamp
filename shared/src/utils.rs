@@ -30,20 +30,18 @@ pub fn current_timestamp() -> Result<String, String> {
     Ok(timestamp)
 }
 
-pub fn print_peer_address(server: &TcpStream) {
-    let address = server
+pub fn get_peer_address(server: &TcpStream) -> String {
+    server
         .peer_addr()
         .map(|address| address.to_string())
-        .unwrap_or_else(|error| format!("client: unable to show address: {error}"));
-    println!("Connected to: {address}");
+        .unwrap_or_else(|error| format!("client: unable to show address: {error}"))
 }
 
-pub fn print_server_address(server: &TcpListener) {
-    let address = server
+pub fn get_server_address(server: &TcpListener) -> String {
+    server
         .local_addr()
         .map(|address| address.to_string())
-        .unwrap_or_else(|error| format!("SERVER ERROR: unable to show address: {error}"));
-    println!("Server listening on: {address}");
+        .unwrap_or_else(|error| format!("SERVER ERROR: unable to show address: {error}"))
 }
 
 pub fn send_encoded(message: Message, stream: &mut TcpStream) -> IoResult<()> {
