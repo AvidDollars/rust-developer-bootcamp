@@ -1,17 +1,18 @@
-use crate::utils::spawn_stdin_channel;
-
-use shared::constants::CLIENT_MSG_BUFFER_SIZE;
-use shared::message::{CborResult, Message, MessageType};
-use shared::utils::{print_peer_address, send_encoded};
-
 use std::io::{self, prelude::*, Error as IoError, ErrorKind};
 use std::net::SocketAddr;
 use std::net::{SocketAddrV4, TcpStream};
 use std::sync::mpsc::TryRecvError;
 
+use crate::utils::spawn_stdin_channel;
+
+use shared::constants::CLIENT_MSG_BUFFER_SIZE;
+use shared::message::{CborResult, Message, MessageType};
+use shared::tracing::{error, info};
+use shared::utils::{get_peer_address, send_encoded};
+
 pub fn run(address: impl Into<SocketAddrV4>) -> io::Result<SocketAddr> {
     let mut stream = try_connect(address)?;
-    print_peer_address(&stream);
+    println!("connected to: {}", get_peer_address(&stream));
 
     let stdin_message = spawn_stdin_channel();
     let mut message_buffer = [0; CLIENT_MSG_BUFFER_SIZE];
@@ -20,28 +21,30 @@ pub fn run(address: impl Into<SocketAddrV4>) -> io::Result<SocketAddr> {
         match stdin_message.try_recv() {
             Ok(message) => send_stdin_message(message, &mut stream)?,
             Err(TryRecvError::Empty) => (),
-            Err(error) => eprintln!("error during receiving stdin messages: {error}"),
+            Err(error) => error!("error during receiving stdin messages: {}", error),
         }
 
         // messages sent from server
         match stream.read(&mut message_buffer) {
             Ok(_) => match try_decode_message_from_buffer(message_buffer) {
                 Ok(message) => message_handler(message),
-                Err(error) => eprintln!("message couldn't be decoded: {error}"),
+                Err(error) => error!("message couldn't be decoded: {}", error),
             },
             Err(ref error) if error.kind() == ErrorKind::WouldBlock => (),
             Err(ref error) if error.kind() == ErrorKind::ConnectionReset => {
-                println!("exiting the process - connection was terminated by the server");
+                let message = "exiting the process - connection was terminated by the server";
+                println!("{message}");
+                info!("{}\n", message);
                 std::process::exit(0);
             }
-            Err(error) => eprintln!("error during receiving message from server: {error}"),
+            Err(error) => error!("error during receiving message from server: {}", error),
         }
     }
 }
 
 fn tcp_connect_error_hander(error: IoError) -> IoError {
     if error.kind() == ErrorKind::ConnectionRefused {
-        eprintln!("no connection could be made - target computer actively refused it");
+        eprintln!("no connection could be made - target computer actively refused it\n");
         std::process::exit(1);
     }
     return error;
@@ -54,7 +57,8 @@ fn message_sender_error_handler(error: IoError) {
             CLIENT_MSG_BUFFER_SIZE
         );
     } else {
-        eprintln!("unable to send encoded message: {error}");
+        eprintln!("unable to send encoded message");
+        error!("{}", error);
     }
 }
 
@@ -70,12 +74,17 @@ fn try_connect(address: impl Into<SocketAddrV4>) -> Result<TcpStream, IoError> {
 }
 
 fn send_stdin_message(mut message: Message, stream: &mut TcpStream) -> io::Result<()> {
+    if message.is_empty() {
+        return Ok(());
+    }
+
     let address = stream.local_addr()?;
     message.set_sender(address);
     let is_quit_message = message.type_ == MessageType::QuitSignal;
     send_encoded(message, stream).unwrap_or_else(message_sender_error_handler);
 
     if is_quit_message {
+        info!("exiting the process\n");
         std::process::exit(0);
     } else {
         Ok(())
@@ -110,9 +119,11 @@ fn message_handler(mut message: Message) {
         if let Err(error) = conversion_result {
             match error.kind() {
                 ErrorKind::InvalidData => {
-                    eprintln!("image cannot be converterted to .png");
+                    error!("{}", error);
+                    eprintln!("image cannot be converted to .png");
                 }
                 ErrorKind::Other => {
+                    error!("{}", error);
                     eprintln!("image cannot be saved");
                 }
                 ErrorKind::Unsupported => (),
@@ -124,7 +135,8 @@ fn message_handler(mut message: Message) {
     let _ = message.save_file().map_err(|error| {
         // saving plain message -> Unsupported
         if error.kind() != ErrorKind::Unsupported {
-            eprintln!("cannot save: {error}");
+            error!("{}", error);
+            eprintln!("cannot save to file");
         }
     });
 }
