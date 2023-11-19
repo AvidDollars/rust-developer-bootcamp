@@ -6,7 +6,7 @@ use image::ImageOutputFormat;
 use serde::{Deserialize, Serialize};
 pub use serde_cbor::{self, Result as CborResult};
 
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug, Display};
 use std::fs;
 use std::io::Cursor;
 use std::io::{self, prelude::*, ErrorKind};
@@ -14,7 +14,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::result::Result;
 use std::str;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Message {
     pub type_: MessageType,
     sender: Option<SocketAddr>,
@@ -43,7 +43,31 @@ impl Display for Message {
             Image { name, .. } | File { name, .. } => {
                 write!(formatter, "[{}]: receiving {}", sender, name)
             }
-            QuitSignal => unreachable!(),
+            QuitSignal => write!(formatter, "[DISCONNECTED: {}]", sender),
+        }
+    }
+}
+
+impl Debug for Message {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        use MessageType::*;
+
+        match &self.type_ {
+            Text { content } => {
+                write!(formatter, "{}", format!("{:?}: {}", self.sender, content))
+            }
+            Image { name, content } | File { name, content } => {
+                let content_len = content.len();
+                let len = if content_len < 10 { content_len } else { 10 };
+                write!(
+                    formatter,
+                    "{:?}: name: {}, content: {:?}",
+                    self.sender,
+                    name,
+                    &content[..len]
+                )
+            }
+            QuitSignal => write!(formatter, "{:?} is quitting", self.sender),
         }
     }
 }
@@ -53,6 +77,16 @@ impl Message {
         Self {
             type_: MessageType::QuitSignal,
             sender,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        use MessageType::*;
+
+        match &self.type_ {
+            Text { content } => content.trim().is_empty(),
+            Image { content, .. } | File { content, .. } => content.is_empty(),
+            QuitSignal => false,
         }
     }
 
@@ -119,7 +153,7 @@ impl Message {
                 file.write_all(content)?;
                 Ok(())
             }
-            QuitSignal => unreachable!(),
+            QuitSignal => Ok(()),
         }
     }
 }
