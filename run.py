@@ -2,13 +2,14 @@ import argparse
 import subprocess
 
 class CliArgs:
-    def __init__(self, mode: str, host: str, port: str):
+    def __init__(self, mode: str, host: str, port: str, level: str):
         self.mode = self.validate_mode(mode)
         self.host = self.validate_host(host)
         self.port = self.validate_port(port)
+        self.log_level = self.validate_log_level(level)
 
     def __repr__(self):
-        return f"CliArgs(mode={self.mode}, host={self.host}, port={self.port})"
+        return f"CliArgs(mode={self.mode}, host={self.host}, port={self.port}, log_level: {self.log_level})"
 
     @staticmethod
     def validate_mode(mode: str) -> str:
@@ -61,9 +62,25 @@ class CliArgs:
 
         return port
 
+    @staticmethod
+    def validate_log_level(level: str) -> str:
+        allowed = ("trace", "debug", "info", "warn", "error")
+        error = ValueError(f"Invalid log level. Allowed are: {' | '.join(allowed)}.")
+
+        if level is None:
+            return "info"
+
+        level = level.strip()
+
+        if level not in allowed:
+            raise error
+        
+        return level.upper()
+
+
 def call_subprocess(args: CliArgs):
     cargo_run = f"cargo run --manifest-path ./{args.mode}/Cargo.toml --release"
-    args = f"--mode {args.mode} --host {args.host} --port {args.port}"
+    args = f"--mode {args.mode} --host {args.host} --port {args.port} --log-level {args.log_level}" 
     subprocess.run(" -- ".join((cargo_run, args)))
 
 def parse_cli_args() -> CliArgs:
@@ -76,10 +93,10 @@ def parse_cli_args() -> CliArgs:
     parser.add_argument('-m', '--mode') 
     parser.add_argument('-o', '--host')
     parser.add_argument('-p,', '--port')
+    parser.add_argument('-l', '--log-level')
     
     args = parser.parse_args()
-
-    return CliArgs(args.mode, args.host, args.port)
+    return CliArgs(args.mode, args.host, args.port, args.log_level)
     
 if __name__ == "__main__":
     try:
