@@ -34,28 +34,28 @@ impl EnvArgs {
         let matches = command!()
             .about("Client-Server chat application for broadcasting messages, files & images.")
             .arg(
-                arg!(mode: "Mode of operation: server (default) or client")
+                arg!(mode: "Mode of operation: server or client")
                     .short('m')
                     .long("mode")
                     .value_parser(["server", "client"])
                     .default_value("server"),
             )
             .arg(
-                arg!(host: "IPv4 address of the host (default: 127.0.0.1)")
+                arg!(host: "IPv4 address of the host")
                     .short('o')
                     .long("host")
                     .value_parser(value_parser!(Ipv4Addr))
                     .default_value("127.0.0.1"),
             )
             .arg(
-                arg!(port: "Specifies a port (default: 11111)")
+                arg!(port: "Specifies a port")
                     .short('p')
                     .long("port")
                     .value_parser(value_parser!(u16))
                     .default_value("11111"),
             )
             .arg(
-                arg!(log_level: "Specifies a log level (default: INFO)")
+                arg!(log_level: "Specifies a log level")
                     .short('l')
                     .long("log-level")
                     .value_parser(clap::builder::ValueParser::new(tracing::Level::from_str))
