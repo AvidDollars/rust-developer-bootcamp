@@ -1,13 +1,16 @@
 use clap::{arg, command, value_parser};
+use tracing;
 
 use std::env;
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct EnvArgs {
     pub mode: String,
     pub host: Ipv4Addr,
     pub port: u16,
+    pub log_level: tracing::Level,
 }
 
 impl Into<SocketAddrV4> for EnvArgs {
@@ -19,6 +22,10 @@ impl Into<SocketAddrV4> for EnvArgs {
 impl EnvArgs {
     pub fn is_server(&self) -> bool {
         self.mode == "server"
+    }
+
+    pub fn get_address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
     }
 }
 
@@ -47,6 +54,13 @@ impl EnvArgs {
                     .value_parser(value_parser!(u16))
                     .default_value("11111"),
             )
+            .arg(
+                arg!(log_level: "Specifies a log level (default: INFO)")
+                    .short('l')
+                    .long("log-level")
+                    .value_parser(clap::builder::ValueParser::new(tracing::Level::from_str))
+                    .default_value("info"),
+            )
             .get_matches();
 
         Ok(Self {
@@ -56,6 +70,9 @@ impl EnvArgs {
                 .to_string(),
             host: *matches.get_one::<Ipv4Addr>("host").expect("provided"),
             port: *matches.get_one::<u16>("port").expect("provided"),
+            log_level: *matches
+                .get_one::<tracing::Level>("log_level")
+                .expect("provided"),
         })
     }
 }
