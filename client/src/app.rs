@@ -18,13 +18,14 @@ pub fn run(address: impl Into<SocketAddrV4>) -> io::Result<SocketAddr> {
     let mut message_buffer = [0; CLIENT_MSG_BUFFER_SIZE];
 
     loop {
+        // receives stdin input & sends it to server for broadcasting
         match stdin_message.try_recv() {
             Ok(message) => send_stdin_message(message, &mut stream)?,
             Err(TryRecvError::Empty) => (),
             Err(error) => error!("error during receiving stdin messages: {}", error),
         }
 
-        // messages sent from server
+        // receives broadcasted messages from server
         match stream.read(&mut message_buffer) {
             Ok(_) => match try_decode_message_from_buffer(message_buffer) {
                 Ok(message) => message_handler(message),

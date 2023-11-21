@@ -22,7 +22,7 @@ pub fn get_log_file() -> fn() -> Box<dyn Write> {
 
 pub fn create_log_file() -> Result<File, Error> {
     let logs_path = Path::new(LOGS_FOLDER);
-    let today_date = Utc::now().format("%d-%m-%Y");
+    let today_date = Utc::now().format("%d-%m-%Y"); // one log file per day
 
     let file = OpenOptions::new()
         .append(true)
@@ -49,6 +49,8 @@ pub fn create_missing_folders(paths: &[&str]) -> io::Result<()> {
     Ok(())
 }
 
+// receiving stdin:
+// spawned in new thread, so that client cant both receive stdin input & messages from server in non-blocking manner
 pub fn spawn_stdin_channel() -> Receiver<Message> {
     let (sender, receiver) = mpsc::channel::<Message>();
 

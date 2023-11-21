@@ -18,11 +18,9 @@ Options:
 ```
 
 ### Logging:
-```markdown
-- **tracing** & **tracing-subscriber** were used for logging
-- **Client**: log output -> saved to <client_folder>/logs/<date>.log
-- **Server**: log output -> stdout
-```
+**tracing** & **tracing-subscriber** crates were used for logging
+**Client**: log output -> saved to <client_folder>/logs/<date>.log
+**Server**: log output -> stdout
 
 ### License
 MIT
