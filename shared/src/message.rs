@@ -26,6 +26,7 @@ pub enum MessageType {
     Image { name: String, content: Vec<u8> },
     File { name: String, content: Vec<u8> },
     QuitSignal,
+    NewConnection,
 }
 
 impl Display for Message {
@@ -43,7 +44,8 @@ impl Display for Message {
             Image { name, .. } | File { name, .. } => {
                 write!(formatter, "[{}]: receiving {}", sender, name)
             }
-            QuitSignal => write!(formatter, "[DISCONNECTED: {}]", sender),
+            QuitSignal => write!(formatter, "[DISCONNECTED]: {}", sender),
+            NewConnection => write!(formatter, "[CONNECTED]: {}", sender),
         }
     }
 }
@@ -68,6 +70,7 @@ impl Debug for Message {
                 )
             }
             QuitSignal => write!(formatter, "{:?} is quitting", self.sender),
+            NewConnection => write!(formatter, "{:?} is now connected", self.sender),
         }
     }
 }
@@ -80,13 +83,20 @@ impl Message {
         }
     }
 
+    pub fn new_connection(sender: Option<SocketAddr>) -> Self {
+        Self {
+            type_: MessageType::NewConnection,
+            sender,
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         use MessageType::*;
 
         match &self.type_ {
             Text { content } => content.trim().is_empty(),
             Image { content, .. } | File { content, .. } => content.is_empty(),
-            QuitSignal => false,
+            QuitSignal | NewConnection => false,
         }
     }
 
@@ -142,7 +152,10 @@ impl Message {
         use MessageType::*;
 
         match &self.type_ {
-            Text { .. } => return Err(io::Error::from(ErrorKind::Unsupported)),
+            // only images & files will be saved
+            Text { .. } | NewConnection | QuitSignal => {
+                return Err(io::Error::from(ErrorKind::Unsupported))
+            }
             Image { name, content } => {
                 let mut file = fs::File::create(format!("./{}/{}", IMAGES_FOLDER, name))?;
                 file.write_all(&content)?;
@@ -153,7 +166,6 @@ impl Message {
                 file.write_all(content)?;
                 Ok(())
             }
-            QuitSignal => Ok(()),
         }
     }
 }
