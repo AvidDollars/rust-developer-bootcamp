@@ -4,6 +4,7 @@ use std::fs;
 use std::io::{self, ErrorKind, Result as IoResult, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::SystemTime;
+use tracing::trace;
 
 pub fn create_missing_folders(paths: &[&str]) -> io::Result<()> {
     for path in paths {
@@ -45,6 +46,11 @@ pub fn get_server_address(server: &TcpListener) -> String {
 }
 
 pub fn send_encoded(message: Message, stream: &mut TcpStream) -> IoResult<()> {
+    trace!(
+        "sending encoded message: {:?}, stream: {:?}",
+        message,
+        stream
+    );
     let (length, message) = message
         .encode()
         .map_err(|_error| io::Error::from(ErrorKind::InvalidData))?;
