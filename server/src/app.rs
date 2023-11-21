@@ -1,5 +1,5 @@
 use shared::message::Message;
-use shared::tracing::{debug, error, info};
+use shared::tracing::{debug, error, info, trace};
 use shared::utils::{get_server_address, new_thread, send_encoded};
 
 use std::fmt::Debug;
@@ -18,8 +18,9 @@ pub fn run<A: Into<SocketAddrV4> + Debug>(address: A) -> Result<(), io::Error> {
 
     for stream in listener.incoming() {
         match stream {
+            // 1 client = 1 new thread
             Ok(connection) => {
-                handle_new_connection(connection, &mut clients, client_sender.clone())?
+                handle_new_connection(connection, &mut clients, client_sender.clone())?;
             }
 
             // process messages coming from clients
@@ -36,6 +37,7 @@ pub fn run<A: Into<SocketAddrV4> + Debug>(address: A) -> Result<(), io::Error> {
     Ok(())
 }
 
+// removes TcpStream from the vector when a client ends the connection
 fn quit_message_handler(
     message: &Message,
     clients: &mut Vec<TcpStream>,
@@ -43,7 +45,6 @@ fn quit_message_handler(
 ) {
     let address = message.get_sender().expect("message will have sender");
 
-    // remove TcpStream from the vector when a client sends ".quit"
     let maybe_idx = clients
         .iter()
         .enumerate()
@@ -54,7 +55,7 @@ fn quit_message_handler(
         debug!("removing from clients: {:?}", stream);
         clients.remove(idx);
     } else {
-        error!("{:?} not in the list of clients", stream);
+        error!("not in the list of clients: {:?}", stream);
     }
 }
 
@@ -64,6 +65,10 @@ fn handle_new_connection(
     client_sender: Sender<Message>,
 ) -> io::Result<()> {
     info!("new connection: {:?}", connection);
+
+    // broadcasting that new client is connected
+    let new_connection_message = Message::new_connection(Some(connection.peer_addr().unwrap()));
+    broadcast_message_to_other_clients(&new_connection_message, clients)?;
 
     // size_of::<TcpStream>() -> 8 bytes... I guess in that case is cloing OK, isn't it?
     clients.push(connection.try_clone()?);
@@ -78,6 +83,12 @@ fn broadcast_message_to_other_clients(
     message: &Message,
     clients: &mut Vec<TcpStream>,
 ) -> Result<(), io::Error> {
+    trace!(
+        "broadcasting message: {:?}, num of clients: {}",
+        message,
+        clients.len()
+    );
+
     for client_stream in clients {
         let peer_address = client_stream.peer_addr().map_err(|error| {
             error!("cannot obtain peer address during broadcasting: {}", error);
@@ -117,12 +128,20 @@ fn read_from_client_and_send_for_broadcasting(
     loop {
         let message = Message::try_from(&mut stream);
 
-        let _ = match message {
-            Ok(message) => client_sender
-                .send(message)
-                .map_err(|error| error!("unable to send message: {}", error)),
-            Err(ref error) // e.g. SIGINT
-                if error.kind() == ErrorKind::ConnectionReset
+        match message {
+            Ok(message) => {
+                let is_quit_message = message.is_quit();
+
+                let _ = client_sender
+                    .send(message)
+                    .map_err(|error| error!("unable to send message: {}", error));
+
+                if is_quit_message {
+                    return; // otherwise [DISCONNECTED] message will be broadcasted twice
+                }
+            }
+            Err(ref error)
+                if error.kind() == ErrorKind::ConnectionReset // e.g. SIGINT
                     || error.kind() == ErrorKind::ConnectionAborted =>
             {
                 let peer_address = stream.peer_addr().map_err(|error| {
@@ -130,8 +149,9 @@ fn read_from_client_and_send_for_broadcasting(
                 });
 
                 if let Ok(address) = peer_address {
-                    let message = Message::quit_signal(Some(address));
-                    client_sender.send(message)
+                    let quit_message = Message::quit_signal(Some(address));
+                    client_sender
+                        .send(quit_message)
                         .unwrap_or_else(|error| error!("unable to send message: {}", error));
                 }
 
