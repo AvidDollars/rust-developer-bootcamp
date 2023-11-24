@@ -1,0 +1,15 @@
+[package]
+name = "lecture-13-21_11"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+nice-errors = ["color-eyre"]
+
+[dependencies]
+anyhow = "1.0.75"
+color-eyre = { version = "0.6.2", optional = true }
+eyre = "0.6.9"
+thiserror = "1.0.50"
+
+
