@@ -1,11 +1,8 @@
 use crate::env_args::EnvArgs;
+use crate::errors::AppError;
 use std::io::Write;
-use tracing::subscriber::SetGlobalDefaultError;
 
-pub fn init_tracing(
-    env_args: &EnvArgs,
-    writer: fn() -> Box<dyn Write>,
-) -> Result<(), SetGlobalDefaultError> {
+pub fn init_tracing(env_args: &EnvArgs, writer: fn() -> Box<dyn Write>) -> Result<(), AppError> {
     let subscriber = tracing_subscriber::fmt()
         .with_file(true)
         .with_max_level(env_args.log_level)

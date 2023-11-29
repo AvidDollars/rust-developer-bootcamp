@@ -130,6 +130,7 @@ fn message_handler(mut message: Message) {
                 ErrorKind::Unsupported => (),
                 _ => unreachable!(),
             }
+            return;
         }
     }
 

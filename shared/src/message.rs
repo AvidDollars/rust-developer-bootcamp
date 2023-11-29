@@ -1,4 +1,5 @@
 use crate::constants::{FILES_FOLDER, IMAGES_FOLDER};
+//use crate::errors::AppError;
 use crate::utils::*;
 
 use image::io::Reader as ImageReader;
