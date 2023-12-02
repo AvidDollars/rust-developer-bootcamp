@@ -1,5 +1,4 @@
 use anyhow::{Result as AnyResult, anyhow, bail, ensure, Context}; // Result -> Result<T, anyhow::Error>
-use thiserror;
 
 fn might_fail_anyhow(flag: bool) -> AnyResult<()> {
     if flag {

@@ -4,6 +4,10 @@ mod c_handling_different_errors_without_conversions;
 mod d_downcasting_errors;
 mod e_anyhow;
 mod f_thiserror;
+mod g_anyhow_personal;
+mod h_thiserror_personal;
+
+use std::error::Error;
 
 #[cfg(feature = "nice-errors")]
 use color_eyre::{Result, eyre::{anyhow, Context}};
@@ -15,16 +19,22 @@ use anyhow::{Result, anyhow, Context};
 //  -   ThisError ->    library
 //  -   AnyHow    ->    code built on top of library
 
-fn main() {
-    // 1:00:34
+fn main() -> Result<(), Box<dyn Error>> {
+    
     
     // cargo run --feature nice-errors
     #[cfg(feature = "nice-errors")] {
         println!("nice-errors: PRESENT");
     }
      
-    //e_anyhow_thiserror::process_tasks();
     
+    let r = h_thiserror_personal::test_app_error();
+
+    if let Err(e) = r {
+        println!("{}", e);
+    }
+
+    Ok(())
 }
 
 // LIBRARIES
