@@ -1,5 +1,5 @@
 use crate::constants::{FILES_FOLDER, IMAGES_FOLDER};
-//use crate::errors::AppError;
+use crate::errors::AppError;
 use crate::utils::*;
 
 use image::io::Reader as ImageReader;
@@ -117,17 +117,17 @@ impl Message {
         self.sender.is_some()
     }
 
-    pub fn is_image_and_png(&self) -> Result<bool, io::Error> {
+    pub fn is_image_and_png(&self) -> Result<bool, AppError> {
         let png_header = [137_u8, 80, 78, 71, 13, 10, 26, 10];
         use MessageType::*;
 
         match &self.type_ {
             Image { content, .. } => Ok(content[..png_header.len()] == png_header),
-            _ => Err(io::Error::from(ErrorKind::Unsupported)),
+            _ => Err(AppError::UnsupportedConversion),
         }
     }
 
-    pub fn convert_image_to_png(&mut self) -> Result<(), io::Error> {
+    pub fn convert_image_to_png(&mut self) -> Result<(), AppError> {
         use MessageType::*;
 
         if let Image {
@@ -135,28 +135,23 @@ impl Message {
         } = self.type_
         {
             let img = ImageReader::new(Cursor::new(&content))
-                .with_guessed_format()
-                .map_err(|_error| io::Error::from(ErrorKind::InvalidData))?
-                .decode()
-                .expect("will not fail when using cursor");
+                .with_guessed_format()?
+                .decode()?;
 
-            img.write_to(&mut Cursor::new(content), ImageOutputFormat::Png)
-                .map_err(|error| io::Error::new(ErrorKind::Other, error))?;
-
+            img.write_to(&mut Cursor::new(content), ImageOutputFormat::Png)?;
             Ok(())
         } else {
-            Err(io::Error::from(ErrorKind::Unsupported))
+            Err(AppError::UnsupportedConversion)
         }
     }
 
-    pub fn save_file(&self) -> Result<(), io::Error> {
+    pub fn save_file(&self) -> Result<(), AppError> {
+        use AppError::*;
         use MessageType::*;
 
         match &self.type_ {
             // only images & files will be saved
-            Text { .. } | NewConnection | QuitSignal => {
-                return Err(io::Error::from(ErrorKind::Unsupported))
-            }
+            Text { .. } | NewConnection | QuitSignal => return Err(UnsupportedConversion),
             Image { name, content } => {
                 let mut file = fs::File::create(format!("./{}/{}", IMAGES_FOLDER, name))?;
                 file.write_all(&content)?;

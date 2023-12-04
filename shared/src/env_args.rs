@@ -30,7 +30,7 @@ impl EnvArgs {
 }
 
 impl EnvArgs {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Self {
         let matches = command!()
             .about("Client-Server chat application for broadcasting messages, files & images.")
             .arg(
@@ -63,7 +63,7 @@ impl EnvArgs {
             )
             .get_matches();
 
-        Ok(Self {
+        Self {
             mode: matches
                 .get_one::<String>("mode")
                 .expect("provided")
@@ -73,6 +73,6 @@ impl EnvArgs {
             log_level: *matches
                 .get_one::<tracing::Level>("log_level")
                 .expect("provided"),
-        })
+        }
     }
 }

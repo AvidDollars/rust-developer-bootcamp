@@ -1,3 +1,4 @@
+use shared::errors::AppError;
 use shared::message::Message;
 use shared::tracing::{debug, error, info, trace};
 use shared::utils::{get_server_address, new_thread, send_encoded};
@@ -8,7 +9,7 @@ use std::net::{SocketAddrV4, TcpListener, TcpStream};
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender, TryRecvError};
 
-pub fn run<A: Into<SocketAddrV4> + Debug>(address: A) -> Result<(), io::Error> {
+pub fn run<A: Into<SocketAddrV4> + Debug>(address: A) -> Result<(), AppError> {
     let listener = TcpListener::bind(address.into())?;
     listener.set_nonblocking(true)?;
     info!("listening on: {}", get_server_address(&listener));
@@ -63,7 +64,7 @@ fn handle_new_connection(
     connection: TcpStream,
     clients: &mut Vec<TcpStream>,
     client_sender: Sender<Message>,
-) -> io::Result<()> {
+) -> Result<(), AppError> {
     info!("new connection: {:?}", connection);
 
     // broadcasting that new client is connected
@@ -82,7 +83,7 @@ fn handle_new_connection(
 fn broadcast_message_to_other_clients(
     message: &Message,
     clients: &mut Vec<TcpStream>,
-) -> Result<(), io::Error> {
+) -> Result<(), AppError> {
     trace!(
         "broadcasting message: {:?}, num of clients: {}",
         message,
@@ -109,7 +110,7 @@ fn broadcast(
     message: &Message,
     clients: &mut Vec<TcpStream>,
     stream: &Result<TcpStream, io::Error>,
-) -> Result<(), io::Error> {
+) -> Result<(), AppError> {
     debug!("message arrived: {:?}", message);
 
     if message.is_quit() {

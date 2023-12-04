@@ -1,4 +1,4 @@
-use std::io::{self, prelude::*, Error as IoError, ErrorKind};
+use std::io::{prelude::*, Error as IoError, ErrorKind};
 use std::net::SocketAddr;
 use std::net::{SocketAddrV4, TcpStream};
 use std::sync::mpsc::TryRecvError;
@@ -6,11 +6,14 @@ use std::sync::mpsc::TryRecvError;
 use crate::utils::spawn_stdin_channel;
 
 use shared::constants::CLIENT_MSG_BUFFER_SIZE;
+use shared::errors::AppError;
 use shared::message::{CborResult, Message, MessageType};
 use shared::tracing::{error, info};
 use shared::utils::{get_peer_address, send_encoded};
 
-pub fn run(address: impl Into<SocketAddrV4>) -> io::Result<SocketAddr> {
+use anyhow::Result as AnyResult;
+
+pub fn run(address: impl Into<SocketAddrV4>) -> AnyResult<SocketAddr> {
     let mut stream = try_connect(address)?;
     println!("connected to: {}", get_peer_address(&stream));
 
@@ -74,7 +77,7 @@ fn try_connect(address: impl Into<SocketAddrV4>) -> Result<TcpStream, IoError> {
         .map_err(tcp_connect_error_hander)
 }
 
-fn send_stdin_message(mut message: Message, stream: &mut TcpStream) -> io::Result<()> {
+fn send_stdin_message(mut message: Message, stream: &mut TcpStream) -> AnyResult<()> {
     if message.is_empty() {
         return Ok(());
     }
@@ -118,27 +121,27 @@ fn message_handler(mut message: Message) {
         let conversion_result = message.convert_image_to_png();
 
         if let Err(error) = conversion_result {
-            match error.kind() {
-                ErrorKind::InvalidData => {
+            use AppError::*;
+
+            match error {
+                UnsupportedConversion => return,
+                error => {
                     error!("{}", error);
-                    eprintln!("image cannot be converted to .png");
+                    eprintln!("{error}");
+                    return;
                 }
-                ErrorKind::Other => {
-                    error!("{}", error);
-                    eprintln!("image cannot be saved");
-                }
-                ErrorKind::Unsupported => (),
-                _ => unreachable!(),
             }
-            return;
         }
     }
 
     let _ = message.save_file().map_err(|error| {
-        // saving plain message -> Unsupported
-        if error.kind() != ErrorKind::Unsupported {
-            error!("{}", error);
-            eprintln!("cannot save to file");
+        match error {
+            // saving plain message -> Unsupported
+            AppError::UnsupportedConversion => return,
+            error => {
+                error!("{}", error);
+                eprintln!("cannot save to file");
+            }
         }
     });
 }

@@ -1,5 +1,5 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Error, ErrorKind, Write};
+use std::io::{self, ErrorKind, Write};
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 
@@ -8,6 +8,7 @@ use shared::message::Message;
 use shared::tracing::{error, info};
 use shared::utils::new_thread;
 
+use anyhow::{anyhow, Result as AnyResult};
 use chrono::Utc;
 
 pub fn get_log_file() -> fn() -> Box<dyn Write> {
@@ -20,7 +21,7 @@ pub fn get_log_file() -> fn() -> Box<dyn Write> {
     }
 }
 
-pub fn create_log_file() -> Result<File, Error> {
+pub fn create_log_file() -> AnyResult<File> {
     let logs_path = Path::new(LOGS_FOLDER);
     let today_date = Utc::now().format("%d-%m-%Y"); // one log file per day
 
@@ -32,7 +33,7 @@ pub fn create_log_file() -> Result<File, Error> {
     Ok(file)
 }
 
-pub fn create_missing_folders(paths: &[&str]) -> io::Result<()> {
+pub fn create_missing_folders(paths: &[&str]) -> AnyResult<()> {
     for path in paths {
         let folder_creation = match fs::create_dir(path) {
             Err(error) => Err(error),
@@ -42,7 +43,7 @@ pub fn create_missing_folders(paths: &[&str]) -> io::Result<()> {
         if let Err(error) = folder_creation {
             match error.kind() {
                 ErrorKind::AlreadyExists => (),
-                other_error => return Err(io::Error::from(other_error)),
+                other_error => return Err(anyhow!(other_error)),
             }
         }
     }
