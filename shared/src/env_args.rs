@@ -13,9 +13,9 @@ pub struct EnvArgs {
     pub log_level: tracing::Level,
 }
 
-impl Into<SocketAddrV4> for EnvArgs {
-    fn into(self) -> SocketAddrV4 {
-        SocketAddrV4::new(self.host, self.port)
+impl From<EnvArgs> for SocketAddrV4 {
+    fn from(env_args: EnvArgs) -> Self {
+        SocketAddrV4::new(env_args.host, env_args.port)
     }
 }
 

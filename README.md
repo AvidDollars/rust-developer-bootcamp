@@ -45,9 +45,3 @@ Options:
 
 ### License
 MIT
-
-### TODOs:
-- shares/message.rs:140 -> error handling for data that cannot be deserialized to .png
-  - maybe to also check it before sending to server?
-
-- where to add anyhow & thiserror -> client / server / shared
